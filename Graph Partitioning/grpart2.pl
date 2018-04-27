@@ -5,14 +5,17 @@ grpart(N, D, Graph, P1, P2, Cost):-
     create_graph(N, D, Graph),
     length(Solution, N),
     Solution #:: 1..N,
-    constrain(Solution, Graph, Cost, P1, P2),
+    constrain(Solution, Graph, CostList, P1, P2),
+    Cost #= sum(CostList),!,
     bb_min(search(Solution, 0, first_fail, indomain_middle, complete, []),
     Cost, bb_options{strategy:restart}).
 
-constrain(Solution, Graph, Cost, P1, P2):-
+constrain(Solution, Graph, CostList, P1, P2):-
     alldifferent(Solution),
     divide(Solution, P1, P2),
-    part(P1, P2, Graph, Cost).
+    length(Graph, L),
+    Cost #:: 0..L,
+    part(P1, P2, Graph, CostList).
 
 sublength(List, 0, [], List).
 sublength(List, GivLength, Result, Rest):-
@@ -38,25 +41,29 @@ connect([X | Xs], [Y | Ys], [X - Y | Result]):-
     connect(Xs, [Y | Ys], Res2),
     append(Res1, Res2, Result).
 
-part(P1, P2, G, Cost):-
-    connect(P1, P2, C),!,
-    computeCost(C, G, 0, Cost).
+part(P1, P2, G, CostList):-
+    connect(P1, P2, C),
+    computeCost(C, G, CostList).
 
-computeCost([], _, N, Cost):-
-    Cost #= N.
-computeCost([Head | Tail], G, N, Cost):-
-    (notgmember(Head, G),!, 
-    computeCost(Tail, G, N, Cost));
-    (N1 #= N + 1,
-    computeCost(Tail, G, N1, Cost)).
+computeCost(_, [], []).
+computeCost([], _, []).
+computeCost([Head | Tail], G, [0 | Fs]):-
+    gmember(Head, G, 0, X),
+    write("HI"),
+    computeCost(Tail, G, Fs).
+computeCost([X - Y | Tail], G, [1 | Fs]):-
+    gmember(X - Y, G, 1, A - B),
+    delete(A - B, G, G1),!,
+    computeCost(Tail, G1, Fs).
 
-notgmember(X - Y, [A - B | _]):-
-    (X \= A,
-    Y \= B);
-    (X \= B,
-    Y \= A).
-notgmember(X, [_ | T]):-
-    notgmember(X, T).
+
+
+gmember(X - Y, [A - B | _], Ret, A - B):-
+    F #= (X #= A and Y #= B) or (X #= B and Y #= A),
+    F = Ret.
+gmember(X, [_ | T], F, R):-
+    gmember(X, T, F, R).
+
 
 % subtract([Head | Tail], G2, Result):-
 %     delete(Head, G2, Rest),
