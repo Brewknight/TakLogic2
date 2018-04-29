@@ -1,21 +1,20 @@
 :- lib(ic).
 :- lib(branch_and_bound).
 
-grpart(N, D, P1, P2, Cost):-
-    create_graph(N, D, Graph),
-    length(Solution, N),
-    Solution #:: 1..N,
-    constrain(Solution, Graph),
-    search(Solution, 0, first_fail, indomain_middle, complete, []),
-    divide(Solution, P1, P2),
-    part(P1, P2, Graph, Parts),
-    computeCost(Parts, Cost).
+go(X, Y, Cost):-
+    length(S, 3),
+    S #:: 1..3,
+    alldifferent(S),
+    divide(S, X, Y),
+    length(C, 3),
+    C #:: 0..1, 
+    G = [1 - 2, 1 - 3, 2 - 3],
 
-constrain(Solution, Graph):-
-    alldifferent(Solution),
-    divide(Solution, P1, P2),
-    part(P1, P2, Graph, Parts).
+    costFunction(G, X, Y, C),
+    Cost #= sum(C),
 
+    bb_min(search(S, 0, first_fail, indomain_middle, complete, []),
+    Cost, bb_options{strategy:restart}).
 
 divide(List, L1, L2):-
     length(List, L),
@@ -23,26 +22,28 @@ divide(List, L1, L2):-
     length(L1, Half),
     append(L1, L2, List).
 
-part([], _, _, []).
-part([X | Xs], S, G, [Parts | Partss]):-
-    %member(X, F),
-    findall(Y, part(X, Y, S, G), Parts),
-    %delete(X, F, Xs),
-    part(Xs, S, G, Partss).
+costFunction([], _, _, []).
+costFunction([H | GT], P1, P2, [C | Cs]):-
+    costFunction(H, P1, P2, C),
+    costFunction(GT, P1, P2, Cs).
 
-part(X, Y, S, G):-
-    \+is_list(X),
-    member(Y, S),
-    (member(X - Y, G);
-    member(Y - X, G)).
-
-computeCost(Parts, Cost):-
-    findall(L, (member(P, Parts), length(P, L)), Ls),
-    summ(Ls, Cost).
-
-summ([], 0).
-summ([X | Xs], Sum):-
-    summ(Xs, Sum1),
-    Sum is Sum1 + X.
+costFunction(A - B, P1, P2, C):-
+    ( (negcheck(P1, A) and negcheck(P1, B)) => (C #\= 1) ),
+    ( (negcheck(P2, A) and negcheck(P2, B)) => (C #\= 1) ),
+    ( (negcheck(P1, A) and negcheck(P2, B)) => (C #\= 0) ),
+    ( (negcheck(P2, A) and negcheck(P1, B)) => (C #\= 0) ).
     
-    
+
+negcheck([H], X, Bool):-
+    Bool #= (H #\= X).
+negcheck([H | T], X, Bool):-
+    Bool #= (H #\= X and negcheck(T, X)).
+
+
+findInDom(X, [H], 0):-
+    \+is_in_domain(X, H).
+findInDom(X, [H], 1):-
+    is_in_domain(X, H).
+findInDom(X, [H | T], Bool):-
+    is_in_domain(X, H),
+    findInDom(X, T, Bool).
