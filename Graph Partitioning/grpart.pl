@@ -1,71 +1,55 @@
 :- lib(ic).
 :- lib(branch_and_bound).
 
-grpart(N, D, Graph, P1, P2, Cost):-
+grpart(N, D, P1, P2, Cost):-
     create_graph(N, D, Graph),
     length(Solution, N),
     Solution #:: 1..N,
-    constrain(Solution, Graph, Cost, P1, P2),
-    bb_min(search(Solution, 0, first_fail, indomain_middle, complete, []),
-    Cost, bb_options{strategy:restart}),
+    constrain(Solution, Graph, Costs),
+    % Count the "1"s in Costs list
+    % This number is how many edges have been cut
+    Cost #= sum(Costs),
+    bb_min(search(Solution, 0, most_constrained, indomain_min, complete, []),
+    Cost, bb_options{strategy:continue, timeout:100}),
     divide(Solution, P1, P2).
 
-constrain(Solution, Graph, Cost, P1, P2):-
+constrain(Solution, Graph, Costs):-
     alldifferent(Solution),
     divide(Solution, P1, P2),
-    partAll(P1, P2, Graph, Cost).
+    % Costs is a list of bools
+    % One element for each edge in graph
+    % 1 stands for cut edge, 0 stands for uncut edge
+    length(Graph, G),
+    length(Costs, G),
+    Costs #:: 0..1,
+    costFunction(Graph, P1, P2, Costs).
 
+% Takes a list and breaks it in 2
+% If length(List) is an odd number, length(P1) > length(P2)
 divide(List, L1, L2):-
     length(List, L),
     Half is L - L // 2,
-    sublength(List, Half, L1, L2).
-
-% Gives all possible combinations of members of GivLength length.
-% Also returns Rest members
-sublength(L, 0, [], L).
-sublength(L, GivLength, Result, Rest):-
-    length(L, Length),
-    GivLength =< Length,
-
-    member(X, L),
-    delete(X, L, L1),
-
-    GivLength1 is GivLength - 1,
-
-    sublength(L1, GivLength1, Res1, Rest),
-    append([X], Res1, Result).
+    length(L1, Half),
+    append(L1, L2, List).
 
 
+costFunction([], _, _, []).
+costFunction([H | GT], P1, P2, [C | Cs]):-
+    costFunction(H, P1, P2, C),
+    costFunction(GT, P1, P2, Cs).
 
-partAll(First, Second, G, N):-
-    partList(First, Second, G, G1),
-    length(G, L1),
-    length(G1, L2),
-    N #= abs(L1 - L2).
-
-partList([], _, G, G).
-partList([X | Xs], Ys, G, G2):-
-    part(X, Ys, G, G1),
-    partList(Xs, Ys, G1, G2).
-
-part(_, [], G, G).
-part(_, _, [], []).
-part(X, [Y | Ys], G, G2):-
-    \+is_list(X),
-    (gmember(X, Y, G), (delete(X - Y, G, G1) ; 
-                       delete(Y - X, G, G1)) ),
-    part(X, Ys, G1, G2).
-
-part(X, [_Y | Ys], G, G2):-
-    part(X, Ys, G, G2).
-
-gmember(X, Y, [A - B | _]):-
-    X #= A,
-    Y #= B ;
-
-    X #= B,
-    Y #= A.
-
-gmember(X, Y, [A - B | Rest]):-
-    gmember(X, Y, Rest).
+costFunction(A - B, P1, P2, C):-
+    % If A,B are both not in P1, then they are both in P2, and edge A - B is not cut. Cost = 0.
+    ( (negcheck(P1, A) and negcheck(P1, B)) => (C #= 0) ),
+    % If A,B are both not in P2, then they are both in P1, and edge A - B is not cut. Cost = 0.
+    ( (negcheck(P2, A) and negcheck(P2, B)) => (C #= 0) ),
+    % If A is not in P1 and B is not in P2, then A is in P2 and B is in P1, and edge A - B is cut. Cost = 1.
+    ( (negcheck(P1, A) and negcheck(P2, B)) => (C #= 1) ),
+    % If A is not in P2 and B is not in P2, then A is in P2 and B is in P1, and edge A - B is cut. Cost = 1.
+    ( (negcheck(P2, A) and negcheck(P1, B)) => (C #= 1) ).
     
+% Checks for negation in whole list.
+negcheck([H], X, Bool):-
+    Bool #= (H #\= X).
+negcheck([H | T], X, Bool):-
+    Bool #= (H #\= X and negcheck(T, X)).
