@@ -14,14 +14,15 @@ warehouses(N1, M1,  YesNoLocs,  CustServs,  Cost):-
     CustServs #:: 1..W,
     constrain(YesNoLocs, FixedCosts, CustServs, VarCosts, W, C, Cost),
     append(YesNoLocs, CustServs, Solution),
-    search(Solution, 0, most_constrained, indomain, complete, []).
+    bb_min(search(Solution, 0, most_constrained, indomain, complete, []),
+    Cost, bb_options{report_failure:1}).
 
 constrain(YesNoLocs, FixedCosts, CustServs, VarCosts, N, M, Cost):-
     length(WareCosts, N),
     WareCosts #:: 0..1.0Inf,
     constrainWares(YesNoLocs, FixedCosts, WareCosts),
     WareCost #= sum(WareCosts),
-    openEnsure(YesNoLocs),
+    openEnsure(YesNoLocs, 1),
 
     length(CustCosts, M),
     CustCosts #:: 0..1.0Inf,
@@ -31,15 +32,17 @@ constrain(YesNoLocs, FixedCosts, CustServs, VarCosts, N, M, Cost):-
 
 constrainCusts([], _, _, []).
 constrainCusts([Serv | Servs], [VarCost | VarCosts], YesNoLocs, [Cost | Costs]):-
-    constrainCust(1, VarCost, YesNoLocs, Cost, Serv),
+    constrainCust(1, VarCost, YesNoLocs, Cost, Serv, 1),
     constrainCusts(Servs, VarCosts, YesNoLocs, Costs).
 
 
-constrainCust(_, [], [], _, _).
-constrainCust(I, [C | Cs], [Y | Ys], Cost, Serv):-
-    (Y #= 1) => (Cost #= C and Serv #= I),
+constrainCust(I, [C], [Y], Cost, Serv, Bool):-
+    Bool #= (Y #= 1 and Cost #= C and Serv #= I).
+constrainCust(I, [C | Cs], [Y | Ys], Cost, Serv, Bool):-
     I1 is I + 1,
-    constrainCust(I1, Cs, Ys, Cost, Serv).
+    Bool #= (Y #= 1 and Cost #= C and Serv #= I) 
+    or (Y #= 0 and constrainCust(I1, Cs, Ys, Cost, Serv)) 
+    or (Y #= 1 and constrainCust(I1, Cs, Ys, Cost, Serv)).
 
 
 constrainWares([], [], []).
@@ -49,16 +52,13 @@ constrainWares([Y | Ys], [W | Ws], [C | Cs]):-
     constrainWares(Ys, Ws, Cs).
     
 % One warehouse at least should be open
-openEnsure([Y]):-
-    Y #= 1.
-openEnsure([Y | Ys]):-
-    Bool #= ((Y #= 1) or openEnsure(Ys)),
-    Bool = 1.
+openEnsure([Y], Bool):-
+    Bool #= (Y #= 1).
 openEnsure([Y | Ys], Bool):-
-    Bool #= ((Y #= 1) or openEnsure(Ys)).
-openEnsure([], 0).
+    Bool #= ((Y #= 1) or (openEnsure(Ys))).
 
 
+% Pull wanted data
 getWarehouses(0, _, AllHouses):-
     fixedcosts(AllHouses).
 getWarehouses(WN, N, []):-
