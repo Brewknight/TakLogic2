@@ -14,8 +14,8 @@ warehouses(N1, M1,  YesNoLocs,  CustServs,  Cost):-
     CustServs #:: 1..W,
     constrain(YesNoLocs, FixedCosts, CustServs, VarCosts, W, C, Cost),
     append(YesNoLocs, CustServs, Solution),
-    bb_min(search(Solution, 0, most_constrained, indomain, complete, []),
-    Cost, bb_options{report_failure:1}).
+    bb_min(search(Solution, 0, first_fail, indomain, complete, []),
+    Cost, bb_options{strategy:dichotomic, delta:1, report_failure:1}).
 
 constrain(YesNoLocs, FixedCosts, CustServs, VarCosts, N, M, Cost):-
     length(WareCosts, N),
@@ -41,8 +41,8 @@ constrainCust(I, [C], [Y], Cost, Serv, Bool):-
 constrainCust(I, [C | Cs], [Y | Ys], Cost, Serv, Bool):-
     I1 is I + 1,
     Bool #= (Y #= 1 and Cost #= C and Serv #= I) 
-    or (Y #= 0 and constrainCust(I1, Cs, Ys, Cost, Serv)) 
-    or (Y #= 1 and constrainCust(I1, Cs, Ys, Cost, Serv)).
+    or (constrainCust(I1, Cs, Ys, Cost, Serv)).
+    %or (Y #= 1 and constrainCust(I1, Cs, Ys, Cost, Serv)).
 
 
 constrainWares([], [], []).
