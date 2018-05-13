@@ -12,13 +12,12 @@ warehouses(N1, M1,  YesNoLocs,  CustServs,  Cost):-
 
     YesNoLocs #:: [0, 1],
     CustServs #:: 1..W,
-    constrain(YesNoLocs, FixedCosts, CustServs, VarCosts, W, C, Cost),
-    append(CustServs, YesNoLocs, Solution),
+    constrain(YesNoLocs, FixedCosts, CustServs, VarCosts, W, C, Cost),!,
+    append(YesNoLocs, CustServs, Solution),
     bb_min(search(Solution, 0, first_fail, indomain, complete, []),
     Cost, bb_options{strategy:continue, delta:1, report_failure:1}).
 
 constrain(YesNoLocs, FixedCosts, CustServs, VarCosts, N, M, Cost):-
-% Create Templates for WareCosts and CustCosts : 
     length(WareCosts, N),
     % List for each warehouse, either 0 or FixedCost
     constrainWareCosts(WareCosts, FixedCosts),
@@ -27,96 +26,87 @@ constrain(YesNoLocs, FixedCosts, CustServs, VarCosts, N, M, Cost):-
     % List for each customer, either 0 or VarCost
     constrainCustCosts(CustCosts, VarCosts),
 
-    % Both must be 0 or both must be not 0
-    constrainAllCustWares(CustCosts, WareCosts),
-
     % Open Warehouse based on CustCosts and WareCosts
-    checkAllWares(CustCosts, YesNoLocs),
-    rev(YesNoLocs, RevYesNoLocs),
+    checkAllWares(CustCosts, WareCosts, YesNoLocs),
 
     length(MinCosts, M),
-    % Non zero mins and indices of non zero mins of cust costs is our cost and serv
-    findNonZeroMins(CustCosts, RevYesNoLocs, MinCosts, CustServs),
+    % Non zero mins of cust costs is our cost and serv
+    findNonZeroMins(CustCosts, YesNoLocs, MinCosts, CustServs),
     CCost #= sum(MinCosts),
     WCost #= sum(WareCosts),
     Cost #= CCost + WCost.
 
-% Reverses a list of binary ic variables
 rev([], []).
 rev([Y | Ys], [Z | Zs]):-
-    Z #= (Y #\= 1),
+    (Y #= 0) => (Z #= 2000000),
+    (Y #= 1) => (Z #= 0),
     rev(Ys, Zs).
 
-% Multiplies each element of list of ic variables by value.
-multiply([], [], _).
-multiply([Y | Ys], [Z | Zs], Value):-
-    Z #= Y * Value,
-    multiply(Ys, Zs, Value).
-
-% Adds 2 lists of ic variables Xs, Ys, with the same length, creating Zs where each Z = X + Y
 add([], [], []).
 add([X | Xs], [Y | Ys], [Z | Zs]):-
     Z #= X + Y,
     add(Xs, Ys, Zs).
 
 findNonZeroMins([], _, [], []).
-findNonZeroMins([CostList | CostLists], RevYesNoLocs, [Cost | Costs], [Serv | Servs]):-
-    length(RevYesNoLocs, L),
+findNonZeroMins([CostList | CostLists], YesNoLocs, [Cost | Costs], [Serv | Servs]):-
+    length(YesNoLocs, L),
     length(Ys, L),
     Ys #:: [0, 2000000],
-    multiply(RevYesNoLocs, Ys, 2000000),
+    rev(YesNoLocs, Ys),
     add(CostList, Ys, Zs),
     Cost #= min(Zs),
     findIndex(CostList, Cost, 1, Serv, 1),
-    findNonZeroMins(CostLists, RevYesNoLocs, Costs, Servs).
+    findNonZeroMins(CostLists, YesNoLocs, Costs, Servs).
 
-% Finds in which index Value lies within a list of ic variables
-findIndex([Y], Value, N, Index, Bool):-
-    Bool #= ((Y #= Value) and (Index #= N)).
-findIndex([Y | Ys], Value, N, Index, Bool):-
+
+findIndex([Y], Min, N, Index, Bool):-
+    Bool #= ((Y #= Min) and (Index #= N)).
+findIndex([Y | Ys], Min, N, Index, Bool):-
     N1 is N + 1,
-    Bool #=  ( ((Y #= Value) and (Index #= N)) or findIndex(Ys, Value, N1, Index) ).
+    Bool #=  ( ((Y #= Min) and (Index #= N)) or findIndex(Ys, Min, N1, Index) ).
 
 
 constrainAllCustWares([], _).
 constrainAllCustWares([CustCost | CustCosts], WareCosts):-
-    constrainCustWares(CustCost, WareCosts),
+    constrainCustWares(CustCost, WareCosts, 1),
     constrainAllCustWares(CustCosts, WareCosts).
-% Both CustCost and WareCost must be either 0 or not 0
-constrainCustWares([], []).
-constrainCustWares([C | Cs], [W | Ws]):-
-    ((C #= 0 and W #= 0) or (C #\= 0 and W #\= 0)),
+
+constrainCustWares([C], [W], Bool):-
+    Bool #= (C #= 0 and W #= 0) or (C #\= 0 and W #\= 0).
+constrainCustWares([C | Cs], [W | Ws], Bool):-
+    Bool #= ((C #= 0 and W #= 0) or (C #\= 0 and W #\= 0)) or
     constrainCustWares(Cs, Ws).
 
-checkAllWares([], _).
-checkAllWares([CustCost | CustCosts], YesNoLocs):-
-    checkWares(CustCost, YesNoLocs),
-    checkAllWares(CustCosts, YesNoLocs).
+checkAllWares([], _, _).
+checkAllWares([CustCost | CustCosts], WareCosts, YesNoLocs):-
+    checkWares(CustCost, WareCosts, YesNoLocs),
+    checkAllWares(CustCosts, WareCosts, YesNoLocs).
 
-checkWares([], []).    
-checkWares([C | Cs], [Y | Ys]):-
-    Y #= (C #\= 0),
-    checkWares(Cs, Ys).
+checkWares([], [], []).    
+checkWares([C | Cs], [W | Ws], [Y | Ys]):-
+    %Y #= (C #\= 0 and W #\= 0),
+    (Y #= 0) => (C #= 0 and W #= 0),
+    (Y #= 1) => (C #\= 0 and W #\= 0),
+    checkWares(Cs, Ws, Ys).
 
 
 constrainCustCosts([], []).
 constrainCustCosts([CustCost | CustCosts], [VarCost | VarCosts]):-
+    % Each CustCost is either 0 or VarCost
     length(VarCost, L),
     length(CustCost, L),
     constrainCustCost(CustCost, VarCost),
     constrainCustCosts(CustCosts, VarCosts).
-% Each CustCost is either 0 or VarCost
+
 constrainCustCost([], []).
 constrainCustCost([C | Cs], [V | Vs]):-
     C #:: [0, V],
     constrainCustCost(Cs, Vs).
 
-% Each WareCost is either 0 or FixedCost
 constrainWareCosts([], []).
 constrainWareCosts([WareCost | WareCosts], [FixedCost | FixedCosts]):-
     WareCost #:: [0, FixedCost],
     constrainWareCosts(WareCosts, FixedCosts).
-
 
 
 % Pull wanted data
