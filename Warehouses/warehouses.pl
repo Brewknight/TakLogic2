@@ -156,8 +156,17 @@ getCustomer(AllCosts, WN, N, [VarCost | VarCosts]):-
     N1 is N + 1,
     getCustomer(AllCosts, WN, N1, VarCosts).
 
-nth(1, [Elem| _], Elem).
-nth(N, [_| Elems], Elem) :-
-    N \= 1,
-    N1 is N - 1,
-    nth(N1, Elems, Elem).
+
+
+% nth(1, [Elem| _], Elem).
+% nth(N, [_| Elems], Elem) :-
+%     N \= 1,
+%     N1 is N - 1,
+%     nth(N1, Elems, Elem).
+
+nth(I, [Elem | _], Elem):-
+    I #= 1.
+nth(I, [_ | Elems], Elem):-
+    I #\= 1,
+    I1 #= I + 1,
+    nth(I1, Elems, Elem).
